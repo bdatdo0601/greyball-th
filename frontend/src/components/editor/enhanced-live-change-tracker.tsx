@@ -1,7 +1,7 @@
 "use client";
 
 import type React from "react";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -37,7 +37,6 @@ export const EnhancedLiveChangeTracker: React.FC<
   isCommitting,
   showPreview = true,
 }) => {
-  console.log(changes);
   const [commitDescription, setCommitDescription] = useState("");
   const [showStats, setShowStats] = useState(false);
   const [filterType, setFilterType] = useState<
@@ -52,9 +51,8 @@ export const EnhancedLiveChangeTracker: React.FC<
   const [sortBy, setSortBy] = useState<"timestamp" | "position" | "type">(
     "timestamp",
   );
-
   // Enhanced filter and sort changes
-  const filteredAndSortedChanges = useMemo(() => {
+  const getFilteredAndSortedChanges = () => {
     let filtered = changes;
 
     if (filterType !== "all") {
@@ -73,10 +71,12 @@ export const EnhancedLiveChangeTracker: React.FC<
           return 0;
       }
     });
-  }, [changes, filterType, sortBy]);
+  };
+
+  const filteredAndSortedChanges = getFilteredAndSortedChanges();
 
   // Enhanced statistics
-  const stats = useMemo(() => {
+  const getStats = () => {
     const insertCount = changes.filter((c) => c.type === "insert").length;
     const deleteCount = changes.filter((c) => c.type === "delete").length;
     const replaceCount = changes.filter((c) => c.type === "replace").length;
@@ -113,10 +113,10 @@ export const EnhancedLiveChangeTracker: React.FC<
       selectedCount,
       totalCharChanges,
     };
-  }, [changes]);
-
+  };
+  const stats = getStats();
   // Generate preview content
-  const previewContent = useMemo(() => {
+  const getPreviewContent = () => {
     if (!showPreview) return null;
 
     const contentChanges = changes.filter((c) => c.field === "content");
@@ -126,7 +126,8 @@ export const EnhancedLiveChangeTracker: React.FC<
       content: applyChangesToText(originalContent, contentChanges),
       title: applyChangesToText(originalTitle, titleChanges),
     };
-  }, [changes, originalContent, originalTitle, showPreview]);
+  };
+  const previewContent = getPreviewContent();
 
   const handleCommit = () => {
     const selectedChanges = changes.filter((change) => change.selected);
@@ -688,17 +689,9 @@ export const EnhancedLiveChangeTracker: React.FC<
             <div
               key={change.id}
               className={`border rounded-lg p-3 cursor-pointer transition-all ${getChangeColor(change.type, change.selected)}`}
-              onClick={() => handleChangeToggle(change.id)}
             >
               <div className="flex items-start gap-3">
                 <div className="flex-shrink-0 flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={change.selected}
-                    onChange={() => handleChangeToggle(change.id)}
-                    className={`rounded ${change.selected ? "text-blue-600" : "text-gray-400"}`}
-                    onClick={(e) => e.stopPropagation()}
-                  />
                   {getChangeIcon(change.type)}
                 </div>
 

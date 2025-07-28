@@ -39,6 +39,20 @@ interface HTMLToken {
 }
 
 /**
+ * HTML Element structure for scope-aware diffing
+ */
+interface HTMLElement {
+  type: "element" | "text" | "selfClosing";
+  tagName?: string;
+  openTag?: HTMLToken;
+  closeTag?: HTMLToken;
+  content: HTMLToken[];
+  startIndex: number;
+  endIndex: number;
+  depth: number;
+}
+
+/**
  * HTML-aware tokenizer that breaks content into meaningful units
  */
 export class HTMLTokenizer {
@@ -48,14 +62,14 @@ export class HTMLTokenizer {
 
     while (index < html.length) {
       // Check for HTML tag
-      if (html[index] === '<') {
+      if (html[index] === "<") {
         const tagMatch = html.slice(index).match(/^<[^>]*>/);
         if (tagMatch) {
           tokens.push({
             type: "tag",
             content: tagMatch[0],
             startIndex: index,
-            endIndex: index + tagMatch[0].length
+            endIndex: index + tagMatch[0].length,
           });
           index += tagMatch[0].length;
           continue;
@@ -69,7 +83,7 @@ export class HTMLTokenizer {
           type: "whitespace",
           content: whitespaceMatch[0],
           startIndex: index,
-          endIndex: index + whitespaceMatch[0].length
+          endIndex: index + whitespaceMatch[0].length,
         });
         index += whitespaceMatch[0].length;
         continue;
@@ -77,7 +91,11 @@ export class HTMLTokenizer {
 
       // Find next tag or whitespace to determine text content
       let textEnd = index + 1;
-      while (textEnd < html.length && html[textEnd] !== '<' && !/\s/.test(html[textEnd])) {
+      while (
+        textEnd < html.length &&
+        html[textEnd] !== "<" &&
+        !/\s/.test(html[textEnd])
+      ) {
         textEnd++;
       }
 
@@ -86,7 +104,7 @@ export class HTMLTokenizer {
           type: "text",
           content: html.slice(index, textEnd),
           startIndex: index,
-          endIndex: textEnd
+          endIndex: textEnd,
         });
         index = textEnd;
       } else {
@@ -95,13 +113,125 @@ export class HTMLTokenizer {
           type: "text",
           content: html[index],
           startIndex: index,
-          endIndex: index + 1
+          endIndex: index + 1,
         });
         index++;
       }
     }
 
     return tokens;
+  }
+
+  /**
+   * Parse HTML tokens into a structured hierarchy of elements
+   * This enables scope-aware diffing within individual HTML tags
+   */
+  static parseElements(tokens: HTMLToken[]): HTMLElement[] {
+    const elements: HTMLElement[] = [];
+    const stack: {
+      tagName: string;
+      openTag: HTMLToken;
+      startIndex: number;
+      content: HTMLToken[];
+      depth: number;
+    }[] = [];
+    let depth = 0;
+
+    for (const token of tokens) {
+      if (token.type === "tag") {
+        if (token.content.startsWith("</")) {
+          // Closing tag
+          const tagName = token.content.slice(2, -1).trim();
+
+          // Find matching opening tag in stack
+          for (let i = stack.length - 1; i >= 0; i--) {
+            if (stack[i].tagName.toLowerCase() === tagName.toLowerCase()) {
+              const openElement = stack[i];
+              stack.splice(i, 1);
+
+              elements.push({
+                type: "element",
+                tagName: openElement.tagName,
+                openTag: openElement.openTag,
+                closeTag: token,
+                content: openElement.content,
+                startIndex: openElement.startIndex,
+                endIndex: token.endIndex,
+                depth: openElement.depth,
+              });
+              depth--;
+              break;
+            }
+          }
+        } else if (token.content.endsWith("/>")) {
+          // Self-closing tag
+          const tagMatch = token.content
+            .slice(1, -2)
+            .trim()
+            .match(/^(\w+)/);
+          const tagName = tagMatch ? tagMatch[1] : "";
+
+          elements.push({
+            type: "selfClosing",
+            tagName,
+            openTag: token,
+            content: [],
+            startIndex: token.startIndex,
+            endIndex: token.endIndex,
+            depth,
+          });
+        } else {
+          // Opening tag
+          const tagMatch = token.content
+            .slice(1, -1)
+            .trim()
+            .match(/^(\w+)/);
+          const tagName = tagMatch ? tagMatch[1] : "";
+
+          stack.push({
+            tagName,
+            openTag: token,
+            startIndex: token.startIndex,
+            content: [],
+            depth,
+          });
+          depth++;
+        }
+      } else {
+        // Text or whitespace token
+        if (stack.length > 0) {
+          // Inside an element
+          stack[stack.length - 1].content.push(token);
+        } else {
+          // Top-level text
+          elements.push({
+            type: "text",
+            content: [token],
+            startIndex: token.startIndex,
+            endIndex: token.endIndex,
+            depth: 0,
+          });
+        }
+      }
+    }
+
+    // Handle unclosed tags (malformed HTML)
+    for (const unclosed of stack) {
+      elements.push({
+        type: "element",
+        tagName: unclosed.tagName,
+        openTag: unclosed.openTag,
+        content: unclosed.content,
+        startIndex: unclosed.startIndex,
+        endIndex:
+          unclosed.content.length > 0
+            ? unclosed.content[unclosed.content.length - 1].endIndex
+            : unclosed.openTag.endIndex,
+        depth: unclosed.depth,
+      });
+    }
+
+    return elements.sort((a, b) => a.startIndex - b.startIndex);
   }
 }
 
@@ -110,7 +240,11 @@ export class HTMLTokenizer {
  * Enhanced with HTML-aware tokenization for better change granularity
  */
 export class SimpleDiff {
-  static diff(oldText: string, newText: string, useHtmlTokens: boolean = false): DiffOperation[] {
+  static diff(
+    oldText: string,
+    newText: string,
+    useHtmlTokens: boolean = false,
+  ): DiffOperation[] {
     const operations: DiffOperation[] = [];
 
     if (oldText === newText) {
@@ -132,123 +266,544 @@ export class SimpleDiff {
     }
 
     // Use HTML-aware diff if requested and content looks like HTML
-    if (useHtmlTokens && this.looksLikeHTML(oldText) && this.looksLikeHTML(newText)) {
-      return this.htmlAwareDiff(oldText, newText);
+    if (
+      useHtmlTokens &&
+      SimpleDiff.looksLikeHTML(oldText) &&
+      SimpleDiff.looksLikeHTML(newText)
+    ) {
+      return SimpleDiff.htmlAwareDiff(oldText, newText);
     }
 
     // Fallback to character-based diff
-    return this.characterBasedDiff(oldText, newText);
+    return SimpleDiff.characterBasedDiff(oldText, newText);
   }
 
   private static looksLikeHTML(text: string): boolean {
     // Simple heuristic to detect HTML content
-    return /<[^>]+>/.test(text) || text.includes('&lt;') || text.includes('&gt;');
+    return (
+      /<[^>]+>/.test(text) || text.includes("&lt;") || text.includes("&gt;")
+    );
   }
 
-  private static htmlAwareDiff(oldText: string, newText: string): DiffOperation[] {
+  private static htmlAwareDiff(
+    oldText: string,
+    newText: string,
+  ): DiffOperation[] {
     const oldTokens = HTMLTokenizer.tokenize(oldText);
     const newTokens = HTMLTokenizer.tokenize(newText);
 
-    // Use token-based LCS (Longest Common Subsequence) algorithm
+    const oldElements = HTMLTokenizer.parseElements(oldTokens);
+    const newElements = HTMLTokenizer.parseElements(newTokens);
+
+    console.log(
+      "🔍 HTML Elements - Old:",
+      oldElements.map((el) => ({
+        type: el.type,
+        tagName: el.tagName,
+        startIndex: el.startIndex,
+        endIndex: el.endIndex,
+        contentCount: el.content.length,
+      })),
+    );
+
+    console.log(
+      "🔍 HTML Elements - New:",
+      newElements.map((el) => ({
+        type: el.type,
+        tagName: el.tagName,
+        startIndex: el.startIndex,
+        endIndex: el.endIndex,
+        contentCount: el.content.length,
+      })),
+    );
+
     const operations: DiffOperation[] = [];
-    let oldIndex = 0;
-    let newIndex = 0;
 
-    // Find matching token sequences
-    const lcs = this.findLCS(oldTokens, newTokens);
+    // Perform scope-aware diffing
+    const elementDiffs = SimpleDiff.diffElementsScoped(
+      oldElements,
+      newElements,
+    );
+
+    // Convert element diffs to operations
+    for (const diff of elementDiffs) {
+      operations.push(...diff.operations);
+    }
+
+    return SimpleDiff.consolidateOperations(operations);
+  }
+
+  /**
+   * Diff HTML elements in a scope-aware manner with proper position tracking
+   * Each diff operation will be contained within a single HTML element scope
+   */
+  private static diffElementsScoped(
+    oldElements: HTMLElement[],
+    newElements: HTMLElement[],
+  ): Array<{
+    elementType: string;
+    operations: DiffOperation[];
+  }> {
+    const elementDiffs: Array<{
+      elementType: string;
+      operations: DiffOperation[];
+    }> = [];
+
+    // Use a more sophisticated matching algorithm for better element correspondence
+    const matches = SimpleDiff.findElementMatches(oldElements, newElements);
     
-    let lcsIndex = 0;
-    let currentOldPos = 0;
-    let currentNewPos = 0;
+    console.log("🔍 Element Matches:", matches);
 
-    while (lcsIndex < lcs.length || oldIndex < oldTokens.length || newIndex < newTokens.length) {
-      const currentLCS = lcs[lcsIndex];
+    // Process matches and generate scoped operations
+    for (const match of matches) {
+      switch (match.type) {
+        case "delete":
+          // Entire element deleted - this is a scoped change
+          const deletedElement = match.oldElement!;
+          const deletedContent = SimpleDiff.reconstructElementContent(deletedElement);
+          elementDiffs.push({
+            elementType: `${deletedElement.type}:${deletedElement.tagName || "text"}`,
+            operations: [{
+              operation: "delete",
+              text: deletedContent,
+              oldIndex: deletedElement.startIndex,
+            }]
+          });
+          break;
 
-      // Add deletions before the current LCS match
-      while (oldIndex < oldTokens.length && (!currentLCS || oldTokens[oldIndex] !== currentLCS.oldToken)) {
-        const token = oldTokens[oldIndex];
-        operations.push({
-          operation: "delete",
-          text: token.content,
-          oldIndex: currentOldPos
-        });
-        currentOldPos += token.content.length;
-        oldIndex++;
-      }
+        case "insert":
+          // Entire element inserted - this is a scoped change
+          const insertedElement = match.newElement!;
+          const insertedContent = SimpleDiff.reconstructElementContent(insertedElement);
+          elementDiffs.push({
+            elementType: `${insertedElement.type}:${insertedElement.tagName || "text"}`,
+            operations: [{
+              operation: "insert",
+              text: insertedContent,
+              newIndex: insertedElement.startIndex,
+            }]
+          });
+          break;
 
-      // Add insertions before the current LCS match
-      while (newIndex < newTokens.length && (!currentLCS || newTokens[newIndex] !== currentLCS.newToken)) {
-        const token = newTokens[newIndex];
-        operations.push({
-          operation: "insert",
-          text: token.content,
-          newIndex: currentNewPos
-        });
-        currentNewPos += token.content.length;
-        newIndex++;
-      }
+        case "modify":
+          // Element exists in both but may have changes
+          const oldEl = match.oldElement!;
+          const newEl = match.newElement!;
+          
+          const elementsDrasticallyDifferent = SimpleDiff.areElementsDrasticallyDifferent(oldEl, newEl);
 
-      // Add the equal operation for LCS match
-      if (currentLCS && oldIndex < oldTokens.length && newIndex < newTokens.length) {
-        const token = oldTokens[oldIndex];
-        operations.push({
-          operation: "equal",
-          text: token.content
-        });
-        currentOldPos += token.content.length;
-        currentNewPos += token.content.length;
-        oldIndex++;
-        newIndex++;
-        lcsIndex++;
-      } else {
-        break;
+          if (elementsDrasticallyDifferent) {
+            // Treat as complete replacement - scoped change
+            const oldContent = SimpleDiff.reconstructElementContent(oldEl);
+            const newContent = SimpleDiff.reconstructElementContent(newEl);
+
+            elementDiffs.push({
+              elementType: `${oldEl.type}:${oldEl.tagName || "text"}`,
+              operations: [
+                {
+                  operation: "delete",
+                  text: oldContent,
+                  oldIndex: oldEl.startIndex,
+                },
+                {
+                  operation: "insert",
+                  text: newContent,
+                  newIndex: oldEl.startIndex, // Insert at the same position as delete
+                },
+              ],
+            });
+          } else {
+            // Perform detailed intra-element diffing
+            const scopedDiff = SimpleDiff.diffWithinElementScope(oldEl, newEl, oldEl.startIndex);
+            if (scopedDiff.operations.length > 0) {
+              elementDiffs.push(scopedDiff);
+            }
+          }
+          break;
       }
     }
 
-    return this.consolidateOperations(operations);
+    return elementDiffs;
   }
 
-  private static findLCS(oldTokens: HTMLToken[], newTokens: HTMLToken[]): Array<{oldToken: HTMLToken, newToken: HTMLToken}> {
-    // Simple LCS implementation for tokens
-    const lcs: Array<{oldToken: HTMLToken, newToken: HTMLToken}> = [];
-    
-    // O(n*m) dynamic programming approach for LCS
-    const dp: number[][] = Array(oldTokens.length + 1).fill(null).map(() => Array(newTokens.length + 1).fill(0));
-    
-    for (let i = 1; i <= oldTokens.length; i++) {
-      for (let j = 1; j <= newTokens.length; j++) {
-        if (this.tokensEqual(oldTokens[i-1], newTokens[j-1])) {
-          dp[i][j] = dp[i-1][j-1] + 1;
+  /**
+   * Find element matches between old and new element arrays
+   * This provides better correspondence than simple index-based matching
+   */
+  private static findElementMatches(
+    oldElements: HTMLElement[],
+    newElements: HTMLElement[],
+  ): Array<{
+    type: "delete" | "insert" | "modify";
+    oldElement?: HTMLElement;
+    newElement?: HTMLElement;
+  }> {
+    const matches: Array<{
+      type: "delete" | "insert" | "modify";
+      oldElement?: HTMLElement;
+      newElement?: HTMLElement;
+    }> = [];
+
+    // Simple algorithm: match elements by position and similarity
+    // This could be enhanced with more sophisticated matching in the future
+    let oldIndex = 0;
+    let newIndex = 0;
+
+    while (oldIndex < oldElements.length || newIndex < newElements.length) {
+      const oldEl = oldElements[oldIndex];
+      const newEl = newElements[newIndex];
+
+      if (!oldEl && newEl) {
+        // New element inserted
+        matches.push({ type: "insert", newElement: newEl });
+        newIndex++;
+      } else if (oldEl && !newEl) {
+        // Element deleted
+        matches.push({ type: "delete", oldElement: oldEl });
+        oldIndex++;
+      } else if (oldEl && newEl) {
+        // Both elements exist - check similarity
+        const similarity = SimpleDiff.calculateElementSimilarity(oldEl, newEl);
+        
+        if (similarity > 0.3) { // Similarity threshold
+          // Elements are similar enough to be considered the same
+          matches.push({ type: "modify", oldElement: oldEl, newElement: newEl });
+          oldIndex++;
+          newIndex++;
         } else {
-          dp[i][j] = Math.max(dp[i-1][j], dp[i][j-1]);
+          // Elements are too different - check if we should skip one
+          // Look ahead to see if there's a better match
+          const nextOldSimilarity = newElements[newIndex + 1] 
+            ? SimpleDiff.calculateElementSimilarity(oldEl, newElements[newIndex + 1])
+            : 0;
+          const nextNewSimilarity = oldElements[oldIndex + 1]
+            ? SimpleDiff.calculateElementSimilarity(oldElements[oldIndex + 1], newEl)
+            : 0;
+
+          if (nextOldSimilarity > similarity && nextOldSimilarity > nextNewSimilarity) {
+            // Current new element is likely inserted
+            matches.push({ type: "insert", newElement: newEl });
+            newIndex++;
+          } else if (nextNewSimilarity > similarity && nextNewSimilarity >= nextOldSimilarity) {
+            // Current old element is likely deleted
+            matches.push({ type: "delete", oldElement: oldEl });
+            oldIndex++;
+          } else {
+            // Treat as replacement
+            matches.push({ type: "delete", oldElement: oldEl });
+            matches.push({ type: "insert", newElement: newEl });
+            oldIndex++;
+            newIndex++;
+          }
         }
       }
     }
 
-    // Reconstruct LCS
-    let i = oldTokens.length;
-    let j = newTokens.length;
-    
-    while (i > 0 && j > 0) {
-      if (this.tokensEqual(oldTokens[i-1], newTokens[j-1])) {
-        lcs.unshift({oldToken: oldTokens[i-1], newToken: newTokens[j-1]});
-        i--;
-        j--;
-      } else if (dp[i-1][j] > dp[i][j-1]) {
-        i--;
-      } else {
-        j--;
+    return matches;
+  }
+
+  /**
+   * Calculate similarity between two HTML elements
+   */
+  private static calculateElementSimilarity(el1: HTMLElement, el2: HTMLElement): number {
+    // Different types have 0 similarity
+    if (el1.type !== el2.type) {
+      return 0;
+    }
+
+    // Different tag names have low similarity
+    if (el1.tagName !== el2.tagName) {
+      return 0.1;
+    }
+
+    // Same tag name gets base similarity
+    let similarity = 0.5;
+
+    // Compare content similarity
+    const content1 = SimpleDiff.reconstructElementContent(el1);
+    const content2 = SimpleDiff.reconstructElementContent(el2);
+
+    if (content1.length === 0 && content2.length === 0) {
+      return 1.0; // Both empty
+    }
+
+    if (content1.length === 0 || content2.length === 0) {
+      return 0.2; // One empty, one not
+    }
+
+    // Calculate content similarity based on length and character overlap
+    const maxLength = Math.max(content1.length, content2.length);
+    const minLength = Math.min(content1.length, content2.length);
+    const lengthSimilarity = minLength / maxLength;
+
+    // Simple character overlap check
+    const commonChars = SimpleDiff.countCommonChars(content1, content2);
+    const charSimilarity = commonChars / maxLength;
+
+    // Weighted average
+    similarity = 0.3 + (0.4 * lengthSimilarity) + (0.3 * charSimilarity);
+
+    return Math.min(1.0, similarity);
+  }
+
+  /**
+   * Count common characters between two strings (simple approximation)
+   */
+  private static countCommonChars(str1: string, str2: string): number {
+    const chars1 = new Map<string, number>();
+    const chars2 = new Map<string, number>();
+
+    // Count characters in both strings
+    for (const char of str1) {
+      chars1.set(char, (chars1.get(char) || 0) + 1);
+    }
+    for (const char of str2) {
+      chars2.set(char, (chars2.get(char) || 0) + 1);
+    }
+
+    // Count common characters
+    let common = 0;
+    const chars1Entries = Array.from(chars1.entries());
+    for (const [char, count1] of chars1Entries) {
+      const count2 = chars2.get(char) || 0;
+      common += Math.min(count1, count2);
+    }
+
+    return common;
+  }
+
+  /**
+   * Determine if two HTML elements are drastically different
+   * Returns true if they should be treated as completely different elements
+   */
+  private static areElementsDrasticallyDifferent(
+    oldEl: HTMLElement,
+    newEl: HTMLElement,
+  ): boolean {
+    // Different element types are drastically different
+    if (oldEl.type !== newEl.type) {
+      return true;
+    }
+
+    // Different tag names are drastically different
+    if (oldEl.tagName !== newEl.tagName) {
+      return true;
+    }
+
+    // For elements with content, check if content similarity is below threshold
+    const oldContent = SimpleDiff.reconstructElementContent(oldEl);
+    const newContent = SimpleDiff.reconstructElementContent(newEl);
+
+    // If one is empty and the other isn't, they're drastically different
+    if ((oldContent.length === 0) !== (newContent.length === 0)) {
+      return true;
+    }
+
+    // Calculate similarity ratio based on length difference
+    const maxLength = Math.max(oldContent.length, newContent.length);
+    if (maxLength === 0) {
+      return false; // Both empty, not drastically different
+    }
+
+    const lengthDiff = Math.abs(oldContent.length - newContent.length);
+    const lengthSimilarity = 1 - lengthDiff / maxLength;
+
+    // If length similarity is below 50%, consider drastically different
+    if (lengthSimilarity < 0.5) {
+      return true;
+    }
+
+    // For tag elements, also check if opening tags are significantly different
+    if (oldEl.type === "element" && newEl.type === "element") {
+      const oldOpenTag = oldEl.openTag?.content || "";
+      const newOpenTag = newEl.openTag?.content || "";
+
+      // If tag attributes are very different, consider drastically different
+      if (oldOpenTag !== newOpenTag) {
+        const tagMaxLength = Math.max(oldOpenTag.length, newOpenTag.length);
+        if (tagMaxLength > 0) {
+          const tagLengthDiff = Math.abs(oldOpenTag.length - newOpenTag.length);
+          const tagSimilarity = 1 - tagLengthDiff / tagMaxLength;
+
+          if (tagSimilarity < 0.3) {
+            return true;
+          }
+        }
       }
     }
 
-    return lcs;
+    return false;
   }
 
-  private static tokensEqual(token1: HTMLToken, token2: HTMLToken): boolean {
-    return token1.type === token2.type && token1.content === token2.content;
+  /**
+   * Perform diff within the scope of a single HTML element
+   * This ensures all operations stay within the element boundaries
+   */
+  private static diffWithinElementScope(
+    oldEl: HTMLElement,
+    newEl: HTMLElement,
+    basePosition: number,
+  ): {
+    elementType: string;
+    operations: DiffOperation[];
+  } {
+    const operations: DiffOperation[] = [];
+    const elementType = `${oldEl.type}:${oldEl.tagName || "text"}`;
+
+    // If different element types or tag names, treat as complete replacement
+    if (oldEl.type !== newEl.type || oldEl.tagName !== newEl.tagName) {
+      const oldContent = SimpleDiff.reconstructElementContent(oldEl);
+      const newContent = SimpleDiff.reconstructElementContent(newEl);
+
+      operations.push({
+        operation: "delete",
+        text: oldContent,
+        oldIndex: basePosition,
+      });
+      operations.push({
+        operation: "insert",
+        text: newContent,
+        newIndex: basePosition,
+      });
+
+      return { elementType, operations };
+    }
+
+    // Handle different element types
+    if (oldEl.type === "selfClosing") {
+      // Self-closing tags - compare as complete units
+      const oldContent = oldEl.openTag?.content || "";
+      const newContent = newEl.openTag?.content || "";
+
+      if (oldContent !== newContent) {
+        operations.push({
+          operation: "delete",
+          text: oldContent,
+          oldIndex: basePosition,
+        });
+        operations.push({
+          operation: "insert",
+          text: newContent,
+          newIndex: basePosition,
+        });
+      }
+    } else if (oldEl.type === "text") {
+      // Text elements - compare content
+      const oldContent = oldEl.content.map((t) => t.content).join("");
+      const newContent = newEl.content.map((t) => t.content).join("");
+
+      if (oldContent !== newContent) {
+        operations.push({
+          operation: "delete",
+          text: oldContent,
+          oldIndex: basePosition,
+        });
+        operations.push({
+          operation: "insert",
+          text: newContent,
+          newIndex: basePosition,
+        });
+      }
+    } else if (oldEl.type === "element") {
+      // Regular elements - diff opening tag, content, and closing tag separately
+      let currentPos = basePosition;
+
+      // 1. Compare opening tags
+      const oldOpenTag = oldEl.openTag?.content || "";
+      const newOpenTag = newEl.openTag?.content || "";
+
+      if (oldOpenTag !== newOpenTag) {
+        operations.push({
+          operation: "delete",
+          text: oldOpenTag,
+          oldIndex: currentPos,
+        });
+        operations.push({
+          operation: "insert",
+          text: newOpenTag,
+          newIndex: currentPos,
+        });
+      }
+      currentPos += Math.max(oldOpenTag.length, newOpenTag.length);
+
+      // 2. Compare content within the element
+      const oldContentText = oldEl.content.map((t) => t.content).join("");
+      const newContentText = newEl.content.map((t) => t.content).join("");
+
+      if (oldContentText !== newContentText) {
+        // Use character-based diff for content within the element
+        const contentOps = SimpleDiff.characterBasedDiff(
+          oldContentText,
+          newContentText,
+        );
+        for (const op of contentOps) {
+          if (op.operation === "delete" && op.oldIndex !== undefined) {
+            operations.push({
+              operation: "delete",
+              text: op.text,
+              oldIndex: currentPos + op.oldIndex,
+            });
+          } else if (op.operation === "insert" && op.newIndex !== undefined) {
+            operations.push({
+              operation: "insert",
+              text: op.text,
+              newIndex: currentPos + op.newIndex,
+            });
+          } else if (op.operation === "equal") {
+            // Skip equal operations for brevity
+          }
+        }
+      }
+      currentPos += Math.max(oldContentText.length, newContentText.length);
+
+      // 3. Compare closing tags
+      const oldCloseTag = oldEl.closeTag?.content || "";
+      const newCloseTag = newEl.closeTag?.content || "";
+
+      if (oldCloseTag !== newCloseTag) {
+        operations.push({
+          operation: "delete",
+          text: oldCloseTag,
+          oldIndex: currentPos,
+        });
+        operations.push({
+          operation: "insert",
+          text: newCloseTag,
+          newIndex: currentPos,
+        });
+      }
+    }
+
+    return { elementType, operations };
   }
 
-  private static characterBasedDiff(oldText: string, newText: string): DiffOperation[] {
+  /**
+   * Reconstruct the complete textual content of an HTML element
+   */
+  private static reconstructElementContent(element: HTMLElement): string {
+    switch (element.type) {
+      case "selfClosing":
+        return element.openTag?.content || "";
+
+      case "text":
+        return element.content.map((t) => t.content).join("");
+
+      case "element": {
+        const openTag = element.openTag?.content || "";
+        const content = element.content.map((t) => t.content).join("");
+        const closeTag = element.closeTag?.content || "";
+        return openTag + content + closeTag;
+      }
+
+      default:
+        return "";
+    }
+  }
+
+  private static characterBasedDiff(
+    oldText: string,
+    newText: string,
+  ): DiffOperation[] {
     // Find common prefix
     let commonPrefix = 0;
     while (
@@ -330,60 +885,62 @@ export class SimpleDiff {
     return operations;
   }
 
-  private static consolidateOperations(operations: DiffOperation[]): DiffOperation[] {
+  private static consolidateOperations(
+    operations: DiffOperation[],
+  ): DiffOperation[] {
     const consolidated: DiffOperation[] = [];
     let i = 0;
 
     while (i < operations.length) {
       const op = operations[i];
-      
+
       if (op.operation === "equal") {
         // Merge consecutive equal operations
         let mergedText = op.text;
         let j = i + 1;
-        
+
         while (j < operations.length && operations[j].operation === "equal") {
           mergedText += operations[j].text;
           j++;
         }
-        
+
         consolidated.push({
           operation: "equal",
-          text: mergedText
+          text: mergedText,
         });
         i = j;
       } else if (op.operation === "delete") {
         // Merge consecutive delete operations
         let mergedText = op.text;
-        let startIndex = op.oldIndex;
+        const startIndex = op.oldIndex;
         let j = i + 1;
-        
+
         while (j < operations.length && operations[j].operation === "delete") {
           mergedText += operations[j].text;
           j++;
         }
-        
+
         consolidated.push({
           operation: "delete",
           text: mergedText,
-          oldIndex: startIndex
+          oldIndex: startIndex,
         });
         i = j;
       } else if (op.operation === "insert") {
         // Merge consecutive insert operations
         let mergedText = op.text;
-        let startIndex = op.newIndex;
+        const startIndex = op.newIndex;
         let j = i + 1;
-        
+
         while (j < operations.length && operations[j].operation === "insert") {
           mergedText += operations[j].text;
           j++;
         }
-        
+
         consolidated.push({
           operation: "insert",
           text: mergedText,
-          newIndex: startIndex
+          newIndex: startIndex,
         });
         i = j;
       } else {
@@ -492,7 +1049,6 @@ export class EnhancedChangeTracker {
         "🔍 Enhanced Tracker: Skipping diff - too many operations:",
         diffOps.length,
       );
-      return;
     }
 
     // Convert diff operations to tracked changes
@@ -505,7 +1061,6 @@ export class EnhancedChangeTracker {
         "🔍 Enhanced Tracker: Skipping - too many changes generated:",
         newChanges.length,
       );
-      return;
     }
 
     // Update state
@@ -524,50 +1079,49 @@ export class EnhancedChangeTracker {
 
   /**
    * Convert diff operations to tracked changes compatible with patch operations
-   * This version consolidates operations to prevent hundreds of tiny changes
+   * This version uses exact positions from diff operations to avoid position shifts
    */
   private convertDiffOpsToTrackedChanges(
     diffOps: DiffOperation[],
     field: "content" | "title",
   ): TrackedChange[] {
     const changes: TrackedChange[] = [];
-    let currentPosition = 0;
 
-    // Process operations and consolidate them properly
+    // Process operations using their exact position indices
     for (const op of diffOps) {
       switch (op.operation) {
         case "equal":
-          // Just advance the position, no change to track
-          currentPosition += op.text.length;
+          // Equal operations don't need to be tracked as changes
           break;
 
         case "insert":
+          // Use the exact new index from the diff operation
+          const insertPosition = op.newIndex !== undefined ? op.newIndex : 0;
           changes.push({
             id: generateChangeId(),
             type: "insert",
-            position: currentPosition,
+            position: insertPosition,
             text: op.text,
             field,
             timestamp: Date.now(),
             applied: false,
             selected: true,
           });
-          // Insert doesn't advance currentPosition since it's an insertion at this point
           break;
 
         case "delete":
+          // Use the exact old index from the diff operation
+          const deletePosition = op.oldIndex !== undefined ? op.oldIndex : 0;
           changes.push({
             id: generateChangeId(),
             type: "delete",
-            position: currentPosition,
+            position: deletePosition,
             length: op.text.length,
             field,
             timestamp: Date.now(),
             applied: false,
             selected: true,
           });
-          // Deletion advances position since we're "past" the deleted content in the original
-          currentPosition += op.text.length;
           break;
       }
     }

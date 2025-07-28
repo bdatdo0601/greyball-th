@@ -4,22 +4,19 @@ import "@/styles/live-tracking.css";
 import { Extension } from "@tiptap/core";
 import { History } from "@tiptap/extension-history";
 import { Placeholder } from "@tiptap/extension-placeholder";
-import { type Editor, EditorContent, useEditor } from "@tiptap/react";
+import { EditorContent, useEditor } from "@tiptap/react";
 import { StarterKit } from "@tiptap/starter-kit";
 import { useCallback, useEffect, useRef, useState } from "react";
 import apiClient from "@/lib/api";
 import {
   applySelectedChanges,
   convertTrackedChangesToPatchRequest,
-  generateChangeId,
-  mergeCompatibleChanges,
 } from "@/lib/changeTracking";
 import {
   createEnhancedChangeTracker,
   type EnhancedChangeTracker,
 } from "@/lib/enhanced-diff-tracking";
 import type { ChangeTrackingState, TrackedChange } from "@/lib/types";
-import { calculateSimpleDiff, debounce } from "@/lib/utils";
 import EnhancedLiveChangeTracker from "./enhanced-live-change-tracker";
 
 // JSON Document structure for internal content management
@@ -85,7 +82,7 @@ const TipTapEditorV3Json: React.FC<TipTapEditorV3JsonProps> = ({
   const [title, setTitle] = useState(initialTitle);
   const [isCommitting, setIsCommitting] = useState(false);
   const [lastSaveTime, setLastSaveTime] = useState<Date | null>(null);
-  const [isTrackingPaused, setIsTrackingPaused] = useState(false);
+  const [_, setIsTrackingPaused] = useState(false);
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -595,7 +592,6 @@ const TipTapEditorV3Json: React.FC<TipTapEditorV3JsonProps> = ({
       // Use the current editor content for preview calculations, not the stored original
       const currentEditorContent =
         editor?.getHTML() || changeTracking.originalContent;
-      const currentEditorText = extractCleanText(currentEditorContent);
       const currentTitle = title;
 
       const previewContent = applySelectedChanges(
