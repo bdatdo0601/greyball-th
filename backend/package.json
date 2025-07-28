@@ -1,0 +1,39 @@
+{
+  "name": "document-management-backend",
+  "version": "1.0.0",
+  "description": "POC Document Management System Backend with PATCH API",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "test": "vitest",
+    "test:watch": "vitest --watch",
+    "migrate": "tsx migrations/migrate.ts"
+  },
+  "keywords": [
+    "fastify",
+    "document-management",
+    "patch-api",
+    "postgresql"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "fastify": "^4.24.3",
+    "@fastify/cors": "^8.4.0",
+    "@fastify/postgres": "^5.2.2",
+    "pg": "^8.11.3",
+    "lodash": "^4.17.21",
+    "uuid": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/pg": "^8.10.7",
+    "@types/lodash": "^4.14.200",
+    "@types/uuid": "^9.0.7",
+    "tsx": "^4.6.0",
+    "typescript": "^5.3.0",
+    "vitest": "^1.0.0"
+  }
+}
