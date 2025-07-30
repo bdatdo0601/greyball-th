@@ -199,32 +199,6 @@ export const EnhancedLiveChangeTracker: React.FC<
     }
   };
 
-  // Helper function to extract clean text from HTML
-  const extractCleanText = (html: string): string => {
-    if (!html) return "";
-
-    // Use the same algorithm as backend for consistency
-    let cleanText = "";
-    let inTag = false;
-
-    for (let i = 0; i < html.length; i++) {
-      const char = html[i];
-
-      if (char === "<") {
-        inTag = true;
-      } else if (char === ">") {
-        inTag = false;
-        continue; // Don't include the '>' character
-      }
-
-      if (!inTag) {
-        cleanText += char;
-      }
-    }
-
-    return cleanText;
-  };
-
   const renderChangePreview = (change: TrackedChange) => {
     const originalHTML =
       change.field === "title" ? originalTitle : originalContent;
@@ -243,7 +217,7 @@ export const EnhancedLiveChangeTracker: React.FC<
     };
 
     const boundaries = getCleanTextBoundaries(originalHTML, change);
-    const cleanChangeText = change.text ? extractCleanText(change.text) : "";
+    const changeText = change.text || "";
 
     return (
       <div className="font-sans text-sm border rounded p-3 bg-white max-w-full overflow-hidden hover:shadow-sm transition-shadow">
@@ -347,10 +321,10 @@ export const EnhancedLiveChangeTracker: React.FC<
               </div>
               <div className="bg-green-50 border-l-4 border-green-500 p-2 rounded">
                 <span className="font-mono text-green-800 font-semibold">
-                  "{cleanChangeText}"
+                  "{changeText}"
                 </span>
                 <div className="text-xs text-green-600 mt-1">
-                  Length: {cleanChangeText.length} characters
+                  Length: {changeText.length} characters
                 </div>
               </div>
               {boundaries.before && (
@@ -415,10 +389,10 @@ export const EnhancedLiveChangeTracker: React.FC<
                   To:
                 </div>
                 <span className="font-mono text-green-800 font-semibold">
-                  "{cleanChangeText}"
+                  "{changeText}"
                 </span>
                 <div className="text-xs text-green-600 mt-1">
-                  Length: {cleanChangeText.length} characters
+                  Length: {changeText.length} characters
                 </div>
               </div>
 
@@ -449,13 +423,12 @@ export const EnhancedLiveChangeTracker: React.FC<
               {change.selected ? "Selected" : "Unselected"}
             </span>
           </div>
-          {cleanChangeText &&
-            cleanChangeText.length !== (change.text?.length || 0) && (
-              <div className="mt-1 text-amber-600">
-                Note: HTML stripped - Text: {cleanChangeText.length} chars,
-                HTML: {change.text?.length || 0} chars
-              </div>
-            )}
+          {changeText && changeText.length !== (change.text?.length || 0) && (
+            <div className="mt-1 text-amber-600">
+              Note: HTML stripped - Text: {changeText.length} chars, HTML:{" "}
+              {change.text?.length || 0} chars
+            </div>
+          )}
         </div>
       </div>
     );

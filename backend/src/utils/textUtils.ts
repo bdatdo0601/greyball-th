@@ -9,36 +9,43 @@ export function applyDeltaChanges(
 ): string {
   let result = originalText;
 
-  // Sort changes by position in descending order to avoid position shifts
+  // Sort changes by position in ascending order and track position adjustments
   const sortedChanges = [...changes].sort(
-    (a, b) => (b.position || 0) - (a.position || 0),
+    (a, b) => (a.position || 0) - (b.position || 0),
   );
+
+  let positionOffset = 0;
 
   for (const change of sortedChanges) {
     switch (change.type) {
       case "insert": {
-        const insertPos = change.position || 0;
+        const insertPos = (change.position || 0) + positionOffset;
+        const insertText = change.text || "";
         result =
-          result.slice(0, insertPos) +
-          (change.text || "") +
-          result.slice(insertPos);
+          result.slice(0, insertPos) + insertText + result.slice(insertPos);
+        positionOffset += insertText.length;
         break;
       }
 
       case "delete": {
-        const deleteStart = change.position || 0;
-        const deleteEnd = deleteStart + (change.length || 0);
+        const deleteStart = (change.position || 0) + positionOffset;
+        const deleteLength = change.length || 0;
+        const deleteEnd = deleteStart + deleteLength;
         result = result.slice(0, deleteStart) + result.slice(deleteEnd);
+        positionOffset -= deleteLength;
         break;
       }
 
       case "replace": {
-        const replaceStart = change.position || 0;
-        const replaceEnd = replaceStart + (change.length || 0);
+        const replaceStart = (change.position || 0) + positionOffset;
+        const replaceLength = change.length || 0;
+        const replaceEnd = replaceStart + replaceLength;
+        const replaceText = change.text || "";
         result =
           result.slice(0, replaceStart) +
-          (change.text || "") +
+          replaceText +
           result.slice(replaceEnd);
+        positionOffset += replaceText.length - replaceLength;
         break;
       }
     }

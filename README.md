@@ -14,7 +14,6 @@ A modern, full-stack document management system featuring collaborative editing 
 ### Technical Highlights
 - **Two PATCH API Formats**:
   - Custom Delta format for granular text changes
-  - RFC 6902 JSON Patch standard for structured updates
 - **Auto-save** - Automatic document saving with debounced updates
 - **PostgreSQL Full-Text Search** - Optimized search with tsvector indexing
 - **Docker Development** - Complete containerized development environment
@@ -167,7 +166,6 @@ POST   /api/documents              # Create new document
 GET    /api/documents/:id          # Get specific document
 PUT    /api/documents/:id          # Replace document (versioned)
 PATCH  /api/documents/:id          # Delta patch (versioned)
-PATCH  /api/documents/:id/json-patch # JSON Patch (versioned)
 DELETE /api/documents/:id          # Delete document
 ```
 
@@ -202,30 +200,6 @@ PATCH /api/documents/:id
   ],
   "metadata": {
     "changeDescription": "Added update marker and removed old content"
-  }
-}
-```
-
-#### 2. JSON Patch (RFC 6902)
-Standard JSON Patch format:
-
-```json
-PATCH /api/documents/:id/json-patch
-{
-  "operations": [
-    {
-      "op": "replace",
-      "path": "/title",
-      "value": "Updated Document Title"
-    },
-    {
-      "op": "add",
-      "path": "/metadata/tags/-",
-      "value": "important"
-    }
-  ],
-  "metadata": {
-    "changeDescription": "Updated title and added important tag"
   }
 }
 ```

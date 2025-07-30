@@ -784,9 +784,8 @@ const TipTapEditorV3Json: React.FC<TipTapEditorV3JsonProps> = ({
         lastTitle.current = updatedTitle;
         // Reset the enhanced change tracker with committed content
         if (enhancedChangeTrackerRef.current) {
-          const cleanCommittedText = extractCleanText(updatedHtml);
           enhancedChangeTrackerRef.current.resetBaseline(
-            cleanCommittedText,
+            updatedHtml,
             updatedTitle,
           );
         }
