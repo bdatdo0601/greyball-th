@@ -1,7 +1,7 @@
 "use client";
 
 import { Extension } from "@tiptap/core";
-import { EditorContent, useEditor, type Editor } from "@tiptap/react";
+import { type Editor, EditorContent, useEditor } from "@tiptap/react";
 import { StarterKit } from "@tiptap/starter-kit";
 import { useEffect } from "react";
 
@@ -26,18 +26,18 @@ interface JSONDocument {
 // Readonly extension that disables all interactions
 const ReadOnlyExtension = Extension.create({
   name: "readOnly",
-  
+
   addKeyboardShortcuts() {
     return {
       // Disable all keyboard shortcuts except copy
-      'Mod-z': () => true,
-      'Mod-y': () => true,
-      'Mod-a': () => false, // Allow select all
-      'Mod-x': () => true,
-      'Mod-c': () => false, // Allow copy
-      'Mod-v': () => true,
-      'Delete': () => true,
-      'Backspace': () => true,
+      "Mod-z": () => true,
+      "Mod-y": () => true,
+      "Mod-a": () => false, // Allow select all
+      "Mod-x": () => true,
+      "Mod-c": () => false, // Allow copy
+      "Mod-v": () => true,
+      Delete: () => true,
+      Backspace: () => true,
     };
   },
 
@@ -66,10 +66,8 @@ const ReadOnlyTiptapV3: React.FC<ReadOnlyTiptapV3Props> = ({
   showJsonDebug = false,
 }) => {
   const editor = useEditor({
-    extensions: [
-      StarterKit,
-      ReadOnlyExtension,
-    ],
+    immediatelyRender: false,
+    extensions: [StarterKit, ReadOnlyExtension],
     content: content,
     editable: false,
     editorProps: {
@@ -138,13 +136,11 @@ const ReadOnlyTiptapV3: React.FC<ReadOnlyTiptapV3Props> = ({
       {/* Header */}
       <div className="border-b p-4 bg-gray-100 flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <h3 className="font-medium text-gray-600">Document Viewer (Tiptap v3)</h3>
+          <h3 className="font-medium text-gray-600">
+            Document Viewer (Tiptap v3)
+          </h3>
           <div className="flex items-center gap-2 text-sm text-gray-500">
-            <svg
-              className="w-4 h-4"
-              fill="currentColor"
-              viewBox="0 0 20 20"
-            >
+            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
               <path
                 fillRule="evenodd"
                 d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z"
@@ -157,7 +153,7 @@ const ReadOnlyTiptapV3: React.FC<ReadOnlyTiptapV3Props> = ({
         {showJsonDebug && (
           <div className="flex items-center gap-2">
             <button
-              onClick={() => console.log('JSON Content:', getJsonContent())}
+              onClick={() => console.log("JSON Content:", getJsonContent())}
               className="text-xs px-2 py-1 bg-purple-100 text-purple-700 rounded border border-purple-200 hover:bg-purple-200"
             >
               Debug JSON
@@ -177,10 +173,7 @@ const ReadOnlyTiptapV3: React.FC<ReadOnlyTiptapV3Props> = ({
 
       {/* Content */}
       <div className="p-4 bg-white min-h-[300px]">
-        <EditorContent
-          editor={editor}
-          className="readonly-editor-content"
-        />
+        <EditorContent editor={editor} className="readonly-editor-content" />
       </div>
 
       {/* JSON Debug Panel */}
@@ -211,9 +204,13 @@ const ReadOnlyTiptapV3: React.FC<ReadOnlyTiptapV3Props> = ({
             )}
           </div>
           <div className="flex items-center gap-2">
-            <kbd className="px-1 py-0.5 bg-gray-200 rounded text-xs">Ctrl+A</kbd>
+            <kbd className="px-1 py-0.5 bg-gray-200 rounded text-xs">
+              Ctrl+A
+            </kbd>
             <span>Select All</span>
-            <kbd className="px-1 py-0.5 bg-gray-200 rounded text-xs ml-2">Ctrl+C</kbd>
+            <kbd className="px-1 py-0.5 bg-gray-200 rounded text-xs ml-2">
+              Ctrl+C
+            </kbd>
             <span>Copy</span>
           </div>
         </div>

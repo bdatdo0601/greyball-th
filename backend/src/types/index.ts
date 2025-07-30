@@ -5,7 +5,6 @@ export interface Document {
   metadata?: Record<string, any>;
   created_at: Date;
   updated_at: Date;
-  search_vector?: string;
 }
 
 export interface DocumentVersion {
@@ -19,11 +18,11 @@ export interface DocumentVersion {
 }
 
 export interface DocumentChange {
-  type: 'insert' | 'delete' | 'replace';
+  type: "insert" | "delete" | "replace";
   position?: number;
   length?: number;
   text?: string;
-  field: 'title' | 'content';
+  field: "title" | "content";
 }
 
 export interface PatchRequest {

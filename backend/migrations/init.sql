@@ -11,8 +11,7 @@ CREATE TABLE IF NOT EXISTS documents (
   content TEXT NOT NULL,
   metadata JSONB DEFAULT '{}',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  search_vector tsvector GENERATED ALWAYS AS (to_tsvector('english', title || ' ' || content)) STORED
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- Create document_versions table
@@ -28,7 +27,6 @@ CREATE TABLE IF NOT EXISTS document_versions (
 );
 
 -- Create indexes for better performance
-CREATE INDEX IF NOT EXISTS idx_documents_search_vector ON documents USING GIN(search_vector);
 CREATE INDEX IF NOT EXISTS idx_documents_updated_at ON documents(updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_document_versions_document_id ON document_versions(document_id);
 CREATE INDEX IF NOT EXISTS idx_document_versions_version_number ON document_versions(document_id, version_number DESC);
@@ -53,7 +51,7 @@ BEGIN
             '<h1>Running with Docker</h1><p>This application is containerized with Docker Compose for easy deployment:</p><h2>Services</h2><ul><li><strong>postgres</strong>: PostgreSQL 15 database</li><li><strong>backend</strong>: Fastify API server</li><li><strong>frontend</strong>: Next.js web application</li></ul><h2>Quick Start</h2><pre><code># Build and start all services\ndocker-compose up -d\n\n# View logs\ndocker-compose logs -f\n\n# Stop all services\ndocker-compose down</code></pre><p>All data is persisted in Docker volumes, so your documents will survive container restarts!</p>',
             '{"author": "System", "category": "Documentation", "tags": ["docker", "deployment", "infrastructure"]}'
         );
-        
+
         RAISE NOTICE 'Sample data inserted successfully';
     ELSE
         RAISE NOTICE 'Documents table already contains data, skipping sample data insertion';

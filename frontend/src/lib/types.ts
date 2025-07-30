@@ -18,29 +18,55 @@ export interface DocumentVersion {
 }
 
 export interface DocumentChange {
-  type: 'insert' | 'delete' | 'replace' | 'format_add' | 'format_remove' | 'format_change';
+  type:
+    | "insert"
+    | "delete"
+    | "replace"
+    | "format_add"
+    | "format_remove"
+    | "format_change";
   position?: number;
   length?: number;
   text?: string;
-  field: 'title' | 'content';
+  field: "title" | "content";
   formatType?: string;
   formatValue?: any;
 }
 
 export interface TrackedChange {
   id: string;
-  type: 'insert' | 'delete' | 'replace' | 'format_add' | 'format_remove' | 'format_change';
+  type:
+    | "insert"
+    | "delete"
+    | "replace"
+    | "format_add"
+    | "format_remove"
+    | "format_change";
   position: number;
   length?: number;
   text?: string;
   oldText?: string;
-  field: 'title' | 'content';
+  field: "title" | "content";
   timestamp: number;
   applied: boolean;
   selected: boolean;
   preview?: string;
   // New properties for styling changes
-  formatType?: 'bold' | 'italic' | 'heading' | 'bulletList' | 'orderedList' | 'blockquote' | 'codeBlock' | 'link' | 'underline' | 'strike' | 'highlight' | 'code' | 'color' | 'fontSize';
+  formatType?:
+    | "bold"
+    | "italic"
+    | "heading"
+    | "bulletList"
+    | "orderedList"
+    | "blockquote"
+    | "codeBlock"
+    | "link"
+    | "underline"
+    | "strike"
+    | "highlight"
+    | "code"
+    | "color"
+    | "fontSize";
   formatValue?: string | number | boolean; // For attributes like heading level, color value, font size, etc.
   previousFormatValue?: string | number | boolean; // Previous value for format changes
   htmlBefore?: string; // HTML snippet before the change
@@ -82,4 +108,30 @@ export interface APIResponse<T> {
   data?: T;
   error?: string;
   message?: string;
+}
+
+// Search-related types for FlexSearch integration
+export interface SearchOptions {
+  limit?: number;
+  field?: string[];
+  suggest?: boolean;
+}
+
+export interface SearchResponse {
+  documents: Document[];
+  query: string;
+  count: number;
+  searchEngine: string;
+}
+
+export interface SuggestResponse {
+  suggestions: string[];
+  query: string;
+  count: number;
+}
+
+export interface SearchStatsResponse {
+  totalDocuments: number;
+  indexSize: string;
+  searchEngine: string;
 }

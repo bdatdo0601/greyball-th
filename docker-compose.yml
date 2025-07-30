@@ -1,7 +1,26 @@
-version: '3.8'
+version: "3.8"
 
 # Development Docker Compose with Hot Reload
 services:
+  # MongoDB Database
+  mongodb:
+    image: mongo:7-jammy
+    container_name: document-management-mongodb-dev
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: password
+      MONGO_INITDB_DATABASE: document_management
+    volumes:
+      - mongodb_dev_data:/data/db
+    ports:
+      - "27017:27017"
+    networks:
+      - document-management-dev-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
   # PostgreSQL Database
   postgres:
     image: postgres:15-alpine
@@ -23,12 +42,11 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-
   # Backend API Service (Development)
   backend:
     build:
       context: ./backend
-      dockerfile: Dockerfile.dev
+      dockerfile: Dockerfile
     container_name: document-management-api-dev
     environment:
       # Database Configuration
@@ -38,7 +56,7 @@ services:
       DB_USER: postgres
       DB_PASSWORD: password
       DATABASE_URL: postgresql://postgres:password@postgres:5432/document_management
-      
+
       # Server Configuration
       PORT: 3001
       HOST: 0.0.0.0
@@ -53,18 +71,20 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      mongodb:
+        condition: service_healthy
     restart: unless-stopped
 
   # Frontend Web Application (Development)
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile.dev
+      dockerfile: Dockerfile
     container_name: document-management-web-dev
     environment:
       NEXT_PUBLIC_API_URL: http://localhost:3001
       NODE_ENV: development
-      WATCHPACK_POLLING: true  # Enable polling for file changes in Docker
+      WATCHPACK_POLLING: true # Enable polling for file changes in Docker
     ports:
       - "3000:3000"
     volumes:
@@ -84,7 +104,7 @@ services:
     environment:
       PGADMIN_DEFAULT_EMAIL: admin@example.com
       PGADMIN_DEFAULT_PASSWORD: admin
-      PGADMIN_CONFIG_SERVER_MODE: 'False'
+      PGADMIN_CONFIG_SERVER_MODE: "False"
     ports:
       - "5050:80"
     volumes:
@@ -93,12 +113,13 @@ services:
       - document-management-dev-network
     depends_on:
       - postgres
-
 # Named volumes for data persistence
 volumes:
   postgres_dev_data:
     driver: local
   pgadmin_data:
+    driver: local
+  mongodb_dev_data:
     driver: local
 
 # Custom network
