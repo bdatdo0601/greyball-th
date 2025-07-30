@@ -91,10 +91,6 @@ const TipTapEditorV3Json: React.FC<TipTapEditorV3JsonProps> = ({
         // @ts-ignore
         history: false, // We'll add History extension separately
       }),
-      History.configure({
-        depth: 100,
-        newGroupDelay: 500,
-      }),
       LiveChangeTracking,
       Placeholder.configure({
         placeholder,
